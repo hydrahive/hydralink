@@ -7,7 +7,7 @@ if ! id "${HL_USER}" >/dev/null 2>&1; then
   useradd --system --shell /usr/sbin/nologin --home-dir "${HL_PREFIX}" --create-home "${HL_USER}"
 fi
 
-mkdir -p "${HL_PREFIX}"
+mkdir -p "${HL_PREFIX}/agentlink/backend"
 # Backend-Code aus dem Repo kopieren (überschreibt bei Update)
 rsync -a --delete "${REPO_ROOT}/agentlink/backend/" "${HL_PREFIX}/agentlink/backend/"
 chown -R "${HL_USER}:${HL_USER}" "${HL_PREFIX}"
