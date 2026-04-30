@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentLink Status - Live Handoffs</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .refresh-status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+            font-size: 0.9em;
+            color: #a0a0a0;
+        }
+
+        .refresh-indicator {
+            width: 12px;
+            height: 12px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 40px;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(180deg, #667eea, #764ba2);
+        }
+
+        .handoff-card {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            position: relative;
+            border-left: 4px solid;
+            backdrop-filter: blur(10px);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .handoff-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .handoff-card::before {
+            content: '';
+            position: absolute;
+            left: -44px;
+            top: 25px;
+            width: 16px;
+            height: 16px;
+            background: currentColor;
+            border-radius: 50%;
+            border: 3px solid #1a1a2e;
+        }
+
+        /* Agent colors */
+        .agent-lilith { border-left-color: #8b5cf6; color: #8b5cf6; }
+        .agent-castiel { border-left-color: #3b82f6; color: #3b82f6; }
+        .agent-david { border-left-color: #10b981; color: #10b981; }
+        .agent-joshua { border-left-color: #f59e0b; color: #f59e0b; }
+        .agent-default { border-left-color: #6b7280; color: #6b7280; }
+
+        .handoff-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .handoff-agents {
+            font-size: 1.1em;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .agent-name {
+            padding: 4px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+        }
+
+        .arrow {
+            color: #a0a0a0;
+        }
+
+        .timestamp {
+            font-size: 0.85em;
+            color: #a0a0a0;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-pending {
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+        }
+
+        .status-in_progress {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+
+        .status-done {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        .status-blocked {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .handoff-task {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .task-type {
+            display: inline-block;
+            padding: 2px 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            font-size: 0.75em;
+            margin-right: 8px;
+            text-transform: uppercase;
+        }
+
+        .task-description {
+            margin-top: 8px;
+            color: #d0d0d0;
+            line-height: 1.5;
+        }
+
+        .handoff-reason {
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(139, 92, 246, 0.1);
+            border-radius: 6px;
+            font-size: 0.9em;
+            color: #c4b5fd;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #a0a0a0;
+        }
+
+        .error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #a0a0a0;
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .handoff-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+
+            .handoff-agents {
+                font-size: 1em;
+            }
+
+            .timeline {
+                padding-left: 30px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔄 AgentLink Status</h1>
+            <p>Live Handoff Timeline</p>
+            <div class="refresh-status">
+                <div class="refresh-indicator"></div>
+                <span id="refresh-text">Auto-refresh: ON (every 30s)</span>
+            </div>
+        </header>
+
+        <div id="timeline" class="timeline">
+            <div class="loading">Loading handoffs...</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://192.168.178.102:8000';
+        let refreshInterval;
+
+        // Agent color mapping
+        const agentColors = {
+            'lilith': 'agent-lilith',
+            'castiel': 'agent-castiel',
+            'david': 'agent-david',
+            'joshua': 'agent-joshua',
+        };
+
+        // Task type icons
+        const taskIcons = {
+            'bug_fix': '🐛',
+            'feature': '✨',
+            'review': '👀',
+            'research': '🔬',
+            'refactor': '♻️',
+        };
+
+        // Status icons
+        const statusIcons = {
+            'pending': '⏳',
+            'in_progress': '⚡',
+            'done': '✅',
+            'blocked': '🚫',
+        };
+
+        function getAgentClass(agentId) {
+            return agentColors[agentId.toLowerCase()] || 'agent-default';
+        }
+
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(minutes / 60);
+            const days = Math.floor(hours / 24);
+
+            if (minutes < 1) return 'just now';
+            if (minutes < 60) return `${minutes}m ago`;
+            if (hours < 24) return `${hours}h ago`;
+            return `${days}d ago`;
+        }
+
+        function renderHandoffCard(state) {
+            const agentClass = getAgentClass(state.agent_id);
+            const taskIcon = taskIcons[state.task.type] || '📋';
+            const statusIcon = statusIcons[state.task.status] || '❓';
+            const toAgent = state.handoff.to_agent || 'unknown';
+            
+            return `
+                <div class="handoff-card ${agentClass}">
+                    <div class="handoff-header">
+                        <div class="handoff-agents">
+                            <span class="agent-name">${state.agent_id}</span>
+                            <span class="arrow">→</span>
+                            <span class="agent-name">${toAgent}</span>
+                        </div>
+                        <div class="timestamp">${formatTimestamp(state.timestamp)}</div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <span class="status-badge status-${state.task.status}">
+                            ${statusIcon} ${state.task.status}
+                        </span>
+                        <span class="task-type">${taskIcon} ${state.task.type}</span>
+                    </div>
+                    
+                    <div class="handoff-task">
+                        <div class="task-description">${state.task.description}</div>
+                        ${state.handoff.reason ? `
+                            <div class="handoff-reason">
+                                <strong>Reason:</strong> ${state.handoff.reason}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        async function loadHandoffs() {
+            try {
+                const response = await fetch(`${API_BASE}/states?limit=50`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const states = await response.json();
+                
+                // Filter only states with handoffs
+                const handoffs = states.filter(state => 
+                    state.handoff && state.handoff.to_agent
+                ).slice(0, 20);
+
+                const timeline = document.getElementById('timeline');
+                
+                if (handoffs.length === 0) {
+                    timeline.innerHTML = '<div class="empty-state">No handoffs yet</div>';
+                    return;
+                }
+
+                timeline.innerHTML = handoffs.map(renderHandoffCard).join('');
+                
+            } catch (error) {
+                console.error('Error loading handoffs:', error);
+                document.getElementById('timeline').innerHTML = `
+                    <div class="error">
+                        Failed to load handoffs: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Initial load
+        loadHandoffs();
+
+        // Auto-refresh every 30 seconds
+        refreshInterval = setInterval(loadHandoffs, 30000);
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            clearInterval(refreshInterval);
+        });
+    </script>
+</body>
+</html>

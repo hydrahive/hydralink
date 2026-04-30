@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: agentlink
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CHANGE_ME_BEFORE_DEPLOY}
+      POSTGRES_DB: agentlink
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentlink"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      DATABASE_URL: postgresql://agentlink:${POSTGRES_PASSWORD:-CHANGE_ME_BEFORE_DEPLOY}@postgres:5432/agentlink
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  matrix-notifier:
+    build:
+      context: ./matrix-notifier
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://agentlink:${POSTGRES_PASSWORD:-CHANGE_ME_BEFORE_DEPLOY}@postgres:5432/agentlink
+      MATRIX_HOMESERVER: ${MATRIX_HOMESERVER:-https://talk.molkewolke.de}
+      MATRIX_USER_ID: ${MATRIX_USER_ID:-@agentlink:talk.molkewolke.de}
+      MATRIX_ACCESS_TOKEN: ${MATRIX_ACCESS_TOKEN}
+      MATRIX_ROOM_ID: ${MATRIX_ROOM_ID}
+      POLL_INTERVAL: ${POLL_INTERVAL:-5}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

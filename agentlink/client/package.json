@@ -1,0 +1,28 @@
+{
+  "name": "@agentlink/client",
+  "version": "0.1.0",
+  "description": "AgentLink TypeScript client for OpenClaw",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "keywords": [
+    "agentlink",
+    "openclaw",
+    "agent",
+    "state-protocol"
+  ],
+  "author": "Lilith",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.19.33",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}

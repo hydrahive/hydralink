@@ -1,0 +1,34 @@
+{
+  "name": "@agentlink/openclaw-plugin",
+  "version": "0.1.0",
+  "description": "OpenClaw plugin for AgentLink - Agent-to-Agent State Protocol",
+  "openclaw": {
+    "type": "skill",
+    "version": "1.0",
+    "capabilities": ["agentlink"],
+    "provides": {
+      "tools": [
+        {
+          "name": "agentlink",
+          "description": "Agent-to-Agent state transfer protocol",
+          "script": "tools/agentlink.js"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "test": "node tools/agentlink.js --help"
+  },
+  "keywords": [
+    "openclaw",
+    "agent",
+    "state-transfer",
+    "handoff",
+    "collaboration"
+  ],
+  "author": "Castiel & Lilith",
+  "license": "MIT",
+  "dependencies": {
+    "@agentlink/client": "file:../client"
+  }
+}
