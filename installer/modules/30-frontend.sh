@@ -15,9 +15,12 @@ mkdir -p "${HL_FRONTEND_DIR}"
 rsync -a --delete "${REPO_ROOT}/agentlink/frontend/" "${HL_FRONTEND_DIR}/src/"
 chown -R "${HL_USER}:${HL_USER}" "${HL_FRONTEND_DIR}"
 
-# Build mit korrekter API-URL
-VITE_API_URL="http://${HL_BIND_HOST}:${HL_BACKEND_PORT}"
-sudo -u "${HL_USER}" -- bash -c "cd '${HL_FRONTEND_DIR}/src' && npm install --silent && VITE_API_URL='${VITE_API_URL}' npm run build"
+# Build mit Proxy-Pfaden — die SPA läuft hinter nginx unter /agentlink/.
+# API und WebSocket müssen über denselben HTTPS-Origin erreichbar sein,
+# daher relative Pfade statt direkter Port-Zugriff (Port 9000 ist nur intern).
+VITE_API_URL="/agentlink/api"
+VITE_WS_URL="/agentlink/ws"
+sudo -u "${HL_USER}" -- bash -c "cd '${HL_FRONTEND_DIR}/src' && npm install --silent && VITE_API_URL='${VITE_API_URL}' VITE_WS_URL='${VITE_WS_URL}' npm run build"
 
 # Symlink dist/ → /opt/hydralink/frontend/dist (stabiler Pfad für systemd)
 ln -sfn "${HL_FRONTEND_DIR}/src/dist" "${HL_FRONTEND_DIR}/dist"

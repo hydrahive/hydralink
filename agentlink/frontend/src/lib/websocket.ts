@@ -2,7 +2,14 @@
 
 import type { WSMessage } from '../types/api';
 
-const WS_URL = import.meta.env.VITE_WS_URL || `ws://${window.location.hostname}:9000/ws`;
+// VITE_WS_URL kann ein relativer Pfad (/agentlink/ws) oder eine absolute URL sein.
+// Bei relativem Pfad wird Protocol und Host aus window.location ergänzt.
+function resolveWsUrl(raw: string): string {
+  if (raw.startsWith("ws://") || raw.startsWith("wss://")) return raw;
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}${raw}`;
+}
+const WS_URL = resolveWsUrl(import.meta.env.VITE_WS_URL || `ws://${window.location.hostname}:9000/ws`);
 
 export type WSEventHandler = (message: WSMessage) => void;
 
