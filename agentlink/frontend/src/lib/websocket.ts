@@ -2,7 +2,7 @@
 
 import type { WSMessage } from '../types/api';
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://192.168.178.102:8000/ws';
+const WS_URL = import.meta.env.VITE_WS_URL || `ws://${window.location.hostname}:9000/ws`;
 
 export type WSEventHandler = (message: WSMessage) => void;
 

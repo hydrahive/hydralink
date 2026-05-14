@@ -7,7 +7,7 @@ import type {
   ActiveAgentsResponse,
 } from '../types/api';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://192.168.178.102:8000';
+const API_BASE = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:9000`;
 
 class APIError extends Error {
   status: number;
