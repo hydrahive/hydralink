@@ -1,9 +1,19 @@
-fastapi==0.115.0
-uvicorn[standard]==0.32.0
-pydantic==2.9.2
-python-multipart==0.0.12
-redis==5.2.0
-psycopg2-binary==2.9.10
-sqlalchemy==2.0.36
+# Untergrenze + Deckel auf die nächste Major-Version statt exakter Pins.
+#
+# Exakte Pins (==) sahen sicher aus, banden uns aber an Versionen ohne Wheels
+# für neuere Interpreter: unter Python 3.14 (Ubuntu 26.04 Default) hatte
+# pydantic==2.9.2 kein cp314-Wheel, pip fiel auf den Rust-Build von
+# pydantic-core zurück und die Installation brach ab.
+#
+# Der Deckel auf die nächste Major-Version lässt Sicherheits- und
+# Kompatibilitäts-Updates durch, aber keinen unbemerkten Sprung über eine
+# Bruchkante. Gleiche Linie wie hydrahive-core/pyproject.toml.
+fastapi>=0.115,<1
+uvicorn[standard]>=0.32,<1
+pydantic>=2.9,<3
+python-multipart>=0.0.12,<1
+redis>=5.2,<7
+psycopg2-binary>=2.9.10,<3
+sqlalchemy>=2.0.36,<3
 # chromadb wurde entfernt — wird im aktuellen Backend-Code nicht genutzt
 # (war als Future-Slot für semantic search reserviert).

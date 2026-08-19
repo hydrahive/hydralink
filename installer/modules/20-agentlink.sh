@@ -12,8 +12,47 @@ mkdir -p "${HL_PREFIX}/agentlink/backend"
 rsync -a --delete "${REPO_ROOT}/agentlink/backend/" "${HL_PREFIX}/agentlink/backend/"
 chown -R "${HL_USER}:${HL_USER}" "${HL_PREFIX}"
 
-# venv + deps
-sudo -u "${HL_USER}" python3 -m venv "${HL_PREFIX}/.venv"
+# Interpreter wählen. NICHT blind "python3": auf Ubuntu 26.04 ist das Python
+# 3.14, und für die gepinnten Abhängigkeiten (pydantic==2.9.2) gibt es dafür
+# keine fertigen Wheels. pip fällt dann auf den Rust-Build von pydantic-core
+# zurück (maturin/pyo3) und die Installation bricht ab.
+# Darum eine Version bevorzugen, für die Wheels existieren.
+# HL_PYTHON übersteuert die Automatik.
+pick_python() {
+  if [ -n "${HL_PYTHON:-}" ]; then echo "$HL_PYTHON"; return; fi
+  for candidate in python3.12 python3.13 python3.11 python3; do
+    command -v "$candidate" >/dev/null 2>&1 && { echo "$candidate"; return; }
+  done
+  echo "python3"
+}
+HL_PYTHON_BIN="$(pick_python)"
+echo "AgentLink-venv nutzt ${HL_PYTHON_BIN} ($(${HL_PYTHON_BIN} --version 2>&1))"
+
+# venv anlegen. Bei einem BESTEHENDEN venv, dessen Standardinterpreter nicht
+# zum gewaehlten passt, muss --clear gesetzt werden: "python3.X -m venv"
+# aktualisiert zwar pyvenv.cfg und legt bin/python3.X an, ersetzt aber die
+# vorhandenen Symlinks bin/python und bin/python3 NICHT. Ergebnis ist ein
+# Zwitter:
+#   pyvenv.cfg       -> version = 3.12
+#   bin/python3      -> /usr/bin/python3   (3.14, leeres site-packages)
+#   bin/uvicorn      -> #!.../bin/python3.12 (Pakete da)
+# Der Dienst laeuft dann zufaellig, aber ".venv/bin/python -c 'import pydantic'"
+# scheitert mit ModuleNotFoundError, obwohl pip das Paket meldet.
+#
+# Deshalb wird der TATSAECHLICHE Interpreter hinter bin/python geprueft, nicht
+# nur die Angabe in pyvenv.cfg — die war im Fehlerfall bereits korrekt.
+VENV_PY="${HL_PREFIX}/.venv/bin/python"
+VENV_ARGS=""
+if [ -x "$VENV_PY" ]; then
+  want="$("${HL_PYTHON_BIN}" -c 'import sys;print("%d.%d"%sys.version_info[:2])')"
+  have="$("$VENV_PY" -c 'import sys;print("%d.%d"%sys.version_info[:2])' 2>/dev/null || echo "?")"
+  if [ "$want" != "$have" ]; then
+    echo "AgentLink-venv: bin/python ist ${have}, erwartet ${want} — baue venv neu (--clear)"
+    VENV_ARGS="--clear"
+  fi
+fi
+# shellcheck disable=SC2086  # VENV_ARGS ist bewusst leer oder genau ein Flag
+sudo -u "${HL_USER}" "${HL_PYTHON_BIN}" -m venv $VENV_ARGS "${HL_PREFIX}/.venv"
 sudo -u "${HL_USER}" "${HL_PREFIX}/.venv/bin/pip" install --upgrade pip wheel
 sudo -u "${HL_USER}" "${HL_PREFIX}/.venv/bin/pip" install -r "${HL_PREFIX}/agentlink/backend/requirements.txt"
 
