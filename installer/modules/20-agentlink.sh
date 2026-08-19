@@ -28,8 +28,26 @@ pick_python() {
 HL_PYTHON_BIN="$(pick_python)"
 echo "AgentLink-venv nutzt ${HL_PYTHON_BIN} ($(${HL_PYTHON_BIN} --version 2>&1))"
 
-# venv + deps
-sudo -u "${HL_USER}" "${HL_PYTHON_BIN}" -m venv "${HL_PREFIX}/.venv"
+# venv anlegen. Bei einem BESTEHENDEN venv mit anderer Python-Version muss
+# --clear gesetzt werden: "python3.X -m venv" aktualisiert sonst zwar
+# pyvenv.cfg, laesst aber die alten bin/python-Symlinks stehen. Ergebnis waere
+# ein Zwitter — bin/python zeigt auf den alten Interpreter mit leerem
+# site-packages, waehrend die Konsole-Skripte (uvicorn) auf den neuen zeigen.
+# Genau das passierte beim Update einer Installation, deren erster Versuch noch
+# mit Python 3.14 lief: ".venv/bin/python -c 'import pydantic'" scheiterte,
+# obwohl pip das Paket meldete.
+VENV_CFG="${HL_PREFIX}/.venv/pyvenv.cfg"
+VENV_ARGS=""
+if [ -f "$VENV_CFG" ]; then
+  want="$("${HL_PYTHON_BIN}" -c 'import sys;print("%d.%d"%sys.version_info[:2])')"
+  have="$(sed -n 's/^version *= *\([0-9]*\.[0-9]*\).*/\1/p' "$VENV_CFG" | head -1)"
+  if [ -n "$have" ] && [ "$want" != "$have" ]; then
+    echo "AgentLink-venv: Python ${have} -> ${want}, baue venv neu (--clear)"
+    VENV_ARGS="--clear"
+  fi
+fi
+# shellcheck disable=SC2086  # VENV_ARGS ist bewusst leer oder genau ein Flag
+sudo -u "${HL_USER}" "${HL_PYTHON_BIN}" -m venv $VENV_ARGS "${HL_PREFIX}/.venv"
 sudo -u "${HL_USER}" "${HL_PREFIX}/.venv/bin/pip" install --upgrade pip wheel
 sudo -u "${HL_USER}" "${HL_PREFIX}/.venv/bin/pip" install -r "${HL_PREFIX}/agentlink/backend/requirements.txt"
 
