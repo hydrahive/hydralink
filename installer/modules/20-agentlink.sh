@@ -28,21 +28,26 @@ pick_python() {
 HL_PYTHON_BIN="$(pick_python)"
 echo "AgentLink-venv nutzt ${HL_PYTHON_BIN} ($(${HL_PYTHON_BIN} --version 2>&1))"
 
-# venv anlegen. Bei einem BESTEHENDEN venv mit anderer Python-Version muss
-# --clear gesetzt werden: "python3.X -m venv" aktualisiert sonst zwar
-# pyvenv.cfg, laesst aber die alten bin/python-Symlinks stehen. Ergebnis waere
-# ein Zwitter — bin/python zeigt auf den alten Interpreter mit leerem
-# site-packages, waehrend die Konsole-Skripte (uvicorn) auf den neuen zeigen.
-# Genau das passierte beim Update einer Installation, deren erster Versuch noch
-# mit Python 3.14 lief: ".venv/bin/python -c 'import pydantic'" scheiterte,
-# obwohl pip das Paket meldete.
-VENV_CFG="${HL_PREFIX}/.venv/pyvenv.cfg"
+# venv anlegen. Bei einem BESTEHENDEN venv, dessen Standardinterpreter nicht
+# zum gewaehlten passt, muss --clear gesetzt werden: "python3.X -m venv"
+# aktualisiert zwar pyvenv.cfg und legt bin/python3.X an, ersetzt aber die
+# vorhandenen Symlinks bin/python und bin/python3 NICHT. Ergebnis ist ein
+# Zwitter:
+#   pyvenv.cfg       -> version = 3.12
+#   bin/python3      -> /usr/bin/python3   (3.14, leeres site-packages)
+#   bin/uvicorn      -> #!.../bin/python3.12 (Pakete da)
+# Der Dienst laeuft dann zufaellig, aber ".venv/bin/python -c 'import pydantic'"
+# scheitert mit ModuleNotFoundError, obwohl pip das Paket meldet.
+#
+# Deshalb wird der TATSAECHLICHE Interpreter hinter bin/python geprueft, nicht
+# nur die Angabe in pyvenv.cfg — die war im Fehlerfall bereits korrekt.
+VENV_PY="${HL_PREFIX}/.venv/bin/python"
 VENV_ARGS=""
-if [ -f "$VENV_CFG" ]; then
+if [ -x "$VENV_PY" ]; then
   want="$("${HL_PYTHON_BIN}" -c 'import sys;print("%d.%d"%sys.version_info[:2])')"
-  have="$(sed -n 's/^version *= *\([0-9]*\.[0-9]*\).*/\1/p' "$VENV_CFG" | head -1)"
-  if [ -n "$have" ] && [ "$want" != "$have" ]; then
-    echo "AgentLink-venv: Python ${have} -> ${want}, baue venv neu (--clear)"
+  have="$("$VENV_PY" -c 'import sys;print("%d.%d"%sys.version_info[:2])' 2>/dev/null || echo "?")"
+  if [ "$want" != "$have" ]; then
+    echo "AgentLink-venv: bin/python ist ${have}, erwartet ${want} — baue venv neu (--clear)"
     VENV_ARGS="--clear"
   fi
 fi
