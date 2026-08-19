@@ -43,14 +43,27 @@ echo "AgentLink-venv nutzt ${HL_PYTHON_BIN} ($(${HL_PYTHON_BIN} --version 2>&1))
 # nur die Angabe in pyvenv.cfg — die war im Fehlerfall bereits korrekt.
 VENV_PY="${HL_PREFIX}/.venv/bin/python"
 VENV_ARGS=""
-if [ -x "$VENV_PY" ]; then
-  want="$("${HL_PYTHON_BIN}" -c 'import sys;print("%d.%d"%sys.version_info[:2])')"
-  have="$("$VENV_PY" -c 'import sys;print("%d.%d"%sys.version_info[:2])' 2>/dev/null || echo "?")"
-  if [ "$want" != "$have" ]; then
-    echo "AgentLink-venv: bin/python ist ${have}, erwartet ${want} — baue venv neu (--clear)"
+if [ -d "${HL_PREFIX}/.venv" ]; then
+  if [ ! -x "$VENV_PY" ]; then
+    echo "AgentLink-venv: bin/python fehlt oder zeigt auf entfernten Interpreter — baue venv neu (--clear)"
     VENV_ARGS="--clear"
+  else
+    want="$("${HL_PYTHON_BIN}" -c 'import sys;print("%d.%d"%sys.version_info[:2])')"
+    have="$("$VENV_PY" -c 'import sys;print("%d.%d"%sys.version_info[:2])' 2>/dev/null || echo "?")"
+    if [ "$want" != "$have" ]; then
+      echo "AgentLink-venv: bin/python ist ${have}, erwartet ${want} — baue venv neu (--clear)"
+      VENV_ARGS="--clear"
+    fi
   fi
 fi
+
+# Während --clear darf systemd den Dienst nicht fortlaufend neu starten: uvicorn
+# kann sonst bereits auftauchen, während site-packages noch unvollständig sind.
+if [ "$VENV_ARGS" = "--clear" ] && systemctl cat agentlink.service >/dev/null 2>&1; then
+  echo "Stoppe agentlink.service vor dem Venv-Rebuild"
+  systemctl stop agentlink.service || true
+fi
+
 # shellcheck disable=SC2086  # VENV_ARGS ist bewusst leer oder genau ein Flag
 sudo -u "${HL_USER}" "${HL_PYTHON_BIN}" -m venv $VENV_ARGS "${HL_PREFIX}/.venv"
 sudo -u "${HL_USER}" "${HL_PREFIX}/.venv/bin/pip" install --upgrade pip wheel
