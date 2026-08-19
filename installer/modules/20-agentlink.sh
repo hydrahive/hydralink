@@ -12,8 +12,24 @@ mkdir -p "${HL_PREFIX}/agentlink/backend"
 rsync -a --delete "${REPO_ROOT}/agentlink/backend/" "${HL_PREFIX}/agentlink/backend/"
 chown -R "${HL_USER}:${HL_USER}" "${HL_PREFIX}"
 
+# Interpreter wählen. NICHT blind "python3": auf Ubuntu 26.04 ist das Python
+# 3.14, und für die gepinnten Abhängigkeiten (pydantic==2.9.2) gibt es dafür
+# keine fertigen Wheels. pip fällt dann auf den Rust-Build von pydantic-core
+# zurück (maturin/pyo3) und die Installation bricht ab.
+# Darum eine Version bevorzugen, für die Wheels existieren.
+# HL_PYTHON übersteuert die Automatik.
+pick_python() {
+  if [ -n "${HL_PYTHON:-}" ]; then echo "$HL_PYTHON"; return; fi
+  for candidate in python3.12 python3.13 python3.11 python3; do
+    command -v "$candidate" >/dev/null 2>&1 && { echo "$candidate"; return; }
+  done
+  echo "python3"
+}
+HL_PYTHON_BIN="$(pick_python)"
+echo "AgentLink-venv nutzt ${HL_PYTHON_BIN} ($(${HL_PYTHON_BIN} --version 2>&1))"
+
 # venv + deps
-sudo -u "${HL_USER}" python3 -m venv "${HL_PREFIX}/.venv"
+sudo -u "${HL_USER}" "${HL_PYTHON_BIN}" -m venv "${HL_PREFIX}/.venv"
 sudo -u "${HL_USER}" "${HL_PREFIX}/.venv/bin/pip" install --upgrade pip wheel
 sudo -u "${HL_USER}" "${HL_PREFIX}/.venv/bin/pip" install -r "${HL_PREFIX}/agentlink/backend/requirements.txt"
 
