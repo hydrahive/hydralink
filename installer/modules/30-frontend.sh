@@ -22,7 +22,7 @@ VITE_API_URL="/agentlink/api"
 VITE_WS_URL="/agentlink/ws"
 # --base=/agentlink/ sorgt dafür dass Vite Asset-URLs als /agentlink/assets/... baut
 # statt /assets/... — sonst schlägt das Laden unter dem nginx-Subpfad fehl.
-sudo -u "${HL_USER}" -- bash -c "cd '${HL_FRONTEND_DIR}/src' && npm install --silent && VITE_API_URL='${VITE_API_URL}' VITE_WS_URL='${VITE_WS_URL}' npx vite build --base=/agentlink/"
+sudo -u "${HL_USER}" -- bash -c "cd '${HL_FRONTEND_DIR}/src' && npm install --silent && VITE_API_URL='${VITE_API_URL}' VITE_WS_URL='${VITE_WS_URL}' npm exec -- vite build --base=/agentlink/"
 
 # Symlink dist/ → /opt/hydralink/frontend/dist (stabiler Pfad für systemd)
 ln -sfn "${HL_FRONTEND_DIR}/src/dist" "${HL_FRONTEND_DIR}/dist"
