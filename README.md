@@ -33,6 +33,12 @@ Environment overrides:
 - `HL_BIND_HOST` (default `127.0.0.1`) — bind address (loopback only by default)
 - `HL_BACKEND_PORT` (default `8000`) — backend port
 
+Credentials: the database password is generated on first install into
+`/etc/hydralink/db.password` (root, `0600`). The backend reads `DATABASE_URL`
+from `/etc/hydralink/agentlink.env` (root, `0600`, via `EnvironmentFile=`),
+never from the world-readable unit file. The password is passed to `psql` via
+stdin only, so it never appears in a command line (`sudo` journal, `ps`).
+
 ## Operate
 
 ```bash

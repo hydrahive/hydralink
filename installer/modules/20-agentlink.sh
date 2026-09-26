@@ -69,10 +69,17 @@ sudo -u "${HL_USER}" "${HL_PYTHON_BIN}" -m venv $VENV_ARGS "${HL_PREFIX}/.venv"
 sudo -u "${HL_USER}" "${HL_PREFIX}/.venv/bin/pip" install --upgrade pip wheel
 sudo -u "${HL_USER}" "${HL_PREFIX}/.venv/bin/pip" install -r "${HL_PREFIX}/agentlink/backend/requirements.txt"
 
-# Service-Unit installieren
+# Zugangsdaten in eine nur für root lesbare Env-Datei, NICHT in die Unit:
+# /etc/systemd/system/*.service ist für alle Benutzer lesbar, ebenso
+# `systemctl show -p Environment`. systemd liest EnvironmentFile als root.
+HL_ENV_FILE="${HL_ENV_FILE:-$(dirname "$HL_DB_PWD_FILE")/agentlink.env}"
 DB_PWD="$(cat "$HL_DB_PWD_FILE")"
-DATABASE_URL="postgresql://${HL_DB_USER}:${DB_PWD}@127.0.0.1:5432/${HL_DB_NAME}"
+( umask 077; printf 'DATABASE_URL=postgresql://%s:%s@127.0.0.1:5432/%s\n' \
+    "${HL_DB_USER}" "${DB_PWD}" "${HL_DB_NAME}" > "${HL_ENV_FILE}.tmp" )
+chmod 600 "${HL_ENV_FILE}.tmp"
+mv -f "${HL_ENV_FILE}.tmp" "${HL_ENV_FILE}"
 
+# Service-Unit installieren
 cat > /etc/systemd/system/agentlink.service <<EOF
 [Unit]
 Description=AgentLink Backend (HydraLink)
@@ -84,7 +91,7 @@ Type=simple
 User=${HL_USER}
 Group=${HL_USER}
 WorkingDirectory=${HL_PREFIX}/agentlink/backend
-Environment=DATABASE_URL=${DATABASE_URL}
+EnvironmentFile=${HL_ENV_FILE}
 Environment=REDIS_URL=redis://127.0.0.1:6379
 ExecStart=${HL_PREFIX}/.venv/bin/uvicorn main:app --host ${HL_BIND_HOST} --port ${HL_BACKEND_PORT}
 Restart=on-failure
