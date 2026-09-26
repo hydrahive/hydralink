@@ -20,6 +20,29 @@ def test_agentlink_stops_before_clear_rebuild() -> None:
     assert stop_pos < create_pos
 
 
+def _unit_template(text: str) -> str:
+    start = text.index("cat > /etc/systemd/system/agentlink.service <<EOF")
+    return text[start:text.index("\nEOF", start)]
+
+
+def test_db_password_not_in_world_readable_unit() -> None:
+    # /etc/systemd/system/*.service ist für alle lesbar, ebenso `systemctl show`.
+    unit = _unit_template(SCRIPT.read_text())
+
+    assert "DB_PWD" not in unit
+    assert "Environment=DATABASE_URL" not in unit
+    assert "EnvironmentFile=${HL_ENV_FILE}" in unit
+
+
+def test_env_file_written_private_and_atomic() -> None:
+    text = SCRIPT.read_text()
+    write_pos = text.index('> "${HL_ENV_FILE}.tmp"')
+
+    assert "umask 077" in text[text.rindex("(", 0, write_pos):write_pos]
+    assert 'chmod 600 "${HL_ENV_FILE}.tmp"' in text
+    assert text.index('mv -f "${HL_ENV_FILE}.tmp" "${HL_ENV_FILE}"') < text.index("systemctl restart agentlink.service")
+
+
 def test_healthy_venv_does_not_unconditionally_stop_service() -> None:
     text = SCRIPT.read_text()
     clear_guard = text.index('if [ "$VENV_ARGS" = "--clear" ]')
