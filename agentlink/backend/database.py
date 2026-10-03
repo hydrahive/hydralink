@@ -10,8 +10,23 @@ import os
 # Database URL from environment (no default password for security)
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://agentlink@localhost:5432/agentlink")
 
+
+def engine_url(url: str) -> str:
+    """Treiber fest auf psycopg2 — den installieren wir (requirements.txt).
+
+    Seit SQLAlchemy 2.1 bedeutet ``postgresql://`` den Treiber psycopg (Version 3);
+    ohne diese Festlegung startet das Backend nach jeder Neuinstallation nicht
+    (``No module named 'psycopg'``). Gilt auch für ältere env-Dateien mit
+    ``postgresql://``. Explizit gesetzte Treiber (``postgresql+…://``) bleiben.
+    """
+    for prefix in ("postgresql://", "postgres://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg2://" + url[len(prefix):]
+    return url
+
+
 # SQLAlchemy setup
-engine = create_engine(DATABASE_URL)
+engine = create_engine(engine_url(DATABASE_URL))
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
