@@ -72,9 +72,10 @@ sudo -u "${HL_USER}" "${HL_PREFIX}/.venv/bin/pip" install -r "${HL_PREFIX}/agent
 # Zugangsdaten in eine nur für root lesbare Env-Datei, NICHT in die Unit:
 # /etc/systemd/system/*.service ist für alle Benutzer lesbar, ebenso
 # `systemctl show -p Environment`. systemd liest EnvironmentFile als root.
+# Treiber explizit: seit SQLAlchemy 2.1 hieße „postgresql://“ psycopg 3 (nicht installiert).
 HL_ENV_FILE="${HL_ENV_FILE:-$(dirname "$HL_DB_PWD_FILE")/agentlink.env}"
 DB_PWD="$(cat "$HL_DB_PWD_FILE")"
-( umask 077; printf 'DATABASE_URL=postgresql://%s:%s@127.0.0.1:5432/%s\n' \
+( umask 077; printf 'DATABASE_URL=postgresql+psycopg2://%s:%s@127.0.0.1:5432/%s\n' \
     "${HL_DB_USER}" "${DB_PWD}" "${HL_DB_NAME}" > "${HL_ENV_FILE}.tmp" )
 chmod 600 "${HL_ENV_FILE}.tmp"
 mv -f "${HL_ENV_FILE}.tmp" "${HL_ENV_FILE}"
