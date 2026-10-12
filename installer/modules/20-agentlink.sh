@@ -12,18 +12,29 @@ mkdir -p "${HL_PREFIX}/agentlink/backend"
 rsync -a --delete "${REPO_ROOT}/agentlink/backend/" "${HL_PREFIX}/agentlink/backend/"
 chown -R "${HL_USER}:${HL_USER}" "${HL_PREFIX}"
 
-# Interpreter wählen. NICHT blind "python3": auf Ubuntu 26.04 ist das Python
-# 3.14, und für die gepinnten Abhängigkeiten (pydantic==2.9.2) gibt es dafür
-# keine fertigen Wheels. pip fällt dann auf den Rust-Build von pydantic-core
-# zurück (maturin/pyo3) und die Installation bricht ab.
-# Darum eine Version bevorzugen, für die Wheels existieren.
-# HL_PYTHON übersteuert die Automatik.
+# Interpreter wählen: das System-Python der Distribution (Ubuntu 26.04: 3.14,
+# 24.04: 3.12), aufgelöst auf die versionierte Datei, sofern mindestens 3.12.
+# Nur wenn das zu alt ist: nachinstalliertes 3.13/3.12 (deadsnakes).
+# Aufgelöst, weil ein venv aus /usr/bin/python3 nach einem Python-Wechsel
+# still mit dem neuen Interpreter liefe; aus /usr/bin/python3.14 gebaut zeigt
+# bin/python dann ins Leere, und der Neubau unten greift.
+# Früher fest 3.12 zuerst (pydantic==2.9.2 hatte kein cp314-Wheel) — seit den
+# Versionsbereichen in requirements.txt erledigt; dadurch blieb Prod auf einem
+# 3.12 aus alten 24.04-Paketen hängen (HydraHive-Spec python-314-umstieg).
+# HL_PYTHON übersteuert die Automatik, HL_PYTHON_BIN_DIR nur für Tests.
 pick_python() {
   if [ -n "${HL_PYTHON:-}" ]; then echo "$HL_PYTHON"; return; fi
-  for candidate in python3.12 python3.13 python3.11 python3; do
-    command -v "$candidate" >/dev/null 2>&1 && { echo "$candidate"; return; }
+  local dir="${HL_PYTHON_BIN_DIR:-/usr/bin}" candidate resolved minor
+  for candidate in "$dir/python3" "$dir/python3.13" "$dir/python3.12"; do
+    resolved="$(readlink -f -- "$candidate" 2>/dev/null || true)"
+    [ -n "$resolved" ] && [ -x "$resolved" ] || continue
+    minor="$("$resolved" -c 'import sys;print("%d.%d"%sys.version_info[:2])' 2>/dev/null || true)"
+    if [[ "$minor" =~ ^3\.([0-9]+)$ ]] && [ "${BASH_REMATCH[1]}" -ge 12 ]; then
+      echo "$resolved"; return
+    fi
   done
-  echo "python3"
+  echo "Kein Python ab 3.12 unter $dir gefunden" >&2
+  return 1
 }
 HL_PYTHON_BIN="$(pick_python)"
 echo "AgentLink-venv nutzt ${HL_PYTHON_BIN} ($(${HL_PYTHON_BIN} --version 2>&1))"
