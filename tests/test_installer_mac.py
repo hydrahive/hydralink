@@ -271,3 +271,25 @@ def test_db_password_owned_by_service_user(mac):
     r = mac.run("10-postgres.sh", FAKE_UID="0")
     assert r.returncode == 0, r.stderr
     assert f"chown tester {mac.config / 'db.password'}" in mac.call_lines()
+
+
+def test_root_finds_brew_without_path(mac):
+    """Befund 21.10. (Test-Mac): Kern-Update läuft als root, `brew shellenv` verweigert root und sudo setzt einen
+    eigenen PATH → „sudo: brew: command not found“. brew muss über den vollen Pfad laufen."""
+    real_brew = mac.prefix / "bin" / "brew"
+    real_brew.parent.mkdir(parents=True, exist_ok=True)
+    (mac.bin / "brew").rename(real_brew)
+    # sudo-Stub wie macOS: setzt den sicheren PATH (ohne Homebrew)
+    (mac.bin / "sudo").write_text(f'''#!/usr/bin/env bash
+echo "sudo $*" >> "{mac.calls}"
+while [ $# -gt 0 ]; do case "$1" in -u) shift 2 ;; -H|-n|-E) shift ;; *) break ;; esac; done
+PATH="{mac.bin}:/usr/bin:/bin" exec "$@"
+''')
+    r = mac.run(INSTALL_MAC, FAKE_UID="0", HL_USER="tester", HL_BREW=str(real_brew),
+                PATH=f"{mac.bin}:/usr/bin:/bin")
+    assert r.returncode == 0, r.stdout + r.stderr
+    calls = mac.call_lines()
+    assert any(c.startswith(f"sudo -u tester {real_brew}") for c in calls)
+    # npm (Homebrew) unter sudo: PATH muss mit, sonst „npm: command not found“
+    npm = [c for c in calls if c.startswith("sudo -u tester env PATH=") and " npm ci" in c]
+    assert npm and str(real_brew.parent) in npm[0]

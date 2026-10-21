@@ -24,14 +24,33 @@ HL_FRONTEND_PORT="${HL_FRONTEND_PORT:-9001}"
 HL_WAIT="${HL_WAIT:-30}"
 HL_REPO_ROOT="${HL_REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 
-# Homebrew in den PATH holen: /opt/homebrew (Apple Silicon) oder /usr/local (Intel).
-eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv 2>/dev/null || true)"
+# Homebrew über den vollen Pfad: /opt/homebrew (Apple Silicon) oder /usr/local (Intel). Nicht über PATH –
+# als root (Kern-Update per LaunchDaemon) verweigert `brew shellenv` den Dienst und sudo setzt einen eigenen
+# PATH ohne Homebrew („sudo: brew: command not found“, Befund 21.10.2026 auf dem Test-Mac).
+HL_BREW="${HL_BREW:-}"
+if [ -z "$HL_BREW" ]; then
+  for candidate in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    if [ -x "$candidate" ]; then HL_BREW="$candidate"; break; fi
+  done
+fi
+[ -n "$HL_BREW" ] || HL_BREW="$(command -v brew || true)"
+if [ -z "$HL_BREW" ]; then
+  echo "Homebrew nicht gefunden (/opt/homebrew/bin/brew oder /usr/local/bin/brew)" >&2
+  exit 1
+fi
+export PATH="$(dirname "$HL_BREW"):$PATH"
 
 as_root() { [ "$(id -u)" -eq 0 ]; }
 # Homebrew verweigert root – als root deshalb über den Dienstnutzer aufrufen.
-run_brew() { if as_root; then sudo -u "$HL_USER" brew "$@"; else brew "$@"; fi; }
+run_brew() { if as_root; then sudo -u "$HL_USER" "$HL_BREW" "$@"; else "$HL_BREW" "$@"; fi; }
 # Befehl als Dienstnutzer (für git/pip/npm in dessen Ordnern).
-as_user() { if as_root; then sudo -u "$HL_USER" "$@"; else "$@"; fi; }
+# sudo setzt einen eigenen PATH (secure_path) – npm/node aus Homebrew wären sonst unauffindbar.
+as_user() { if as_root; then sudo -u "$HL_USER" env "PATH=$PATH" HOME="$(_user_home)" "$@"; else "$@"; fi; }
+_user_home() {
+  local h
+  h="$(dscl . -read "/Users/$HL_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}' || true)"
+  echo "${h:-/Users/$HL_USER}"
+}
 priv() { if as_root; then "$@"; else sudo "$@"; fi; }
 
 brew_ensure() {
