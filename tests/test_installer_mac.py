@@ -144,7 +144,7 @@ def test_backend_code_copied_and_venv_built(mac):
     assert r.returncode == 0, r.stderr
     assert (mac.hl_prefix / "agentlink" / "backend" / "main.py").exists()
     assert (mac.hl_prefix / ".venv" / "bin" / "uvicorn").exists()
-    assert any(c.startswith("pip install -r") and "requirements.txt" in c for c in mac.call_lines())
+    assert any(c.startswith("pip install") and " -r " in c and "requirements.txt" in c for c in mac.call_lines())
 
 
 def test_backend_env_file_private_with_psycopg2_url(mac):
