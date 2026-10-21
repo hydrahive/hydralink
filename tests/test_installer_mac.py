@@ -213,9 +213,10 @@ def test_install_mac_refuses_linux(mac):
     assert "macOS" in r.stdout + r.stderr
 
 
-def test_install_mac_refuses_root(mac):
-    r = mac.run(INSTALL_MAC, FAKE_UID="0")
+def test_install_mac_refuses_root_without_service_user(mac):
+    r = mac.run(INSTALL_MAC, FAKE_UID="0", HL_USER="")
     assert r.returncode != 0
+    assert "HL_USER" in r.stdout + r.stderr
 
 
 def test_install_mac_runs_all_modules_in_order(mac):
@@ -234,3 +235,39 @@ def test_mac_modules_have_no_linux_tools():
         text = script.read_text()
         for bad in ("apt-get", "systemctl", "useradd", "sudo -u postgres", "/etc/systemd"):
             assert bad not in text, f"{script.name}: {bad}"
+
+
+# ---------------------------------------------------------------- Aufruf aus dem Kern-Update (root)
+
+def test_install_mac_runs_as_root_for_service_user(mac):
+    """update-mac.sh des Kerns läuft als root (LaunchDaemon, kein Terminal, kein sudo-Passwort)."""
+    r = mac.run(INSTALL_MAC, FAKE_UID="0", HL_USER="tester")
+    assert r.returncode == 0, r.stdout + r.stderr
+    calls = mac.call_lines()
+    assert not any(c.startswith("sudo") and "-u tester" not in c for c in calls)   # kein sudo ohne -u
+    assert any(c.startswith("sudo -u tester") and "pip" in c for c in calls)        # pip als Dienstnutzer
+    assert _plist(mac, "io.hydrahive.agentlink")["UserName"] == "tester"
+
+
+def test_install_mac_root_without_service_user_refused(mac):
+    r = mac.run(INSTALL_MAC, FAKE_UID="0", HL_USER="root")
+    assert r.returncode != 0
+
+
+def test_backend_when_repo_is_prefix(mac, tmp_path):
+    """Wie unter Linux: Repo-Klon = Präfix (/opt/hydralink). Kopieren auf sich selbst darf nicht abbrechen."""
+    import shutil
+    from mac_fake import ROOT
+    clone = tmp_path / "clone"
+    shutil.copytree(ROOT / "installer", clone / "installer")
+    shutil.copytree(ROOT / "agentlink" / "backend", clone / "agentlink" / "backend")
+    mac.run("10-postgres.sh")
+    r = mac.run(clone / "installer" / "modules-mac" / "20-agentlink.sh", HL_PREFIX=str(clone))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (clone / "installer" / "lib" / "mac-agentlink-start.sh").stat().st_size > 0
+
+
+def test_db_password_owned_by_service_user(mac):
+    r = mac.run("10-postgres.sh", FAKE_UID="0")
+    assert r.returncode == 0, r.stderr
+    assert f"chown tester {mac.config / 'db.password'}" in mac.call_lines()

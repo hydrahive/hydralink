@@ -14,8 +14,11 @@ priv mkdir -p "$BACKEND" "$HL_PREFIX/installer/lib" "$HL_LOG_DIR"
 priv chown -R "$HL_USER" "$HL_PREFIX"
 # Code + Start-Wrapper aus dem Repo (überschreibt bei Update). Der Wrapper liegt im Präfix,
 # damit die plist nicht auf einen Arbeitsordner zeigt, der später verschwindet.
-as_user rsync -a --delete --exclude __pycache__ "$HL_REPO_ROOT/agentlink/backend/" "$BACKEND/"
-as_user cp "$HL_REPO_ROOT/installer/lib/mac-agentlink-start.sh" "$START"
+# Liegt der Repo-Klon selbst im Präfix (so macht es der Kern, wie unter Linux), ist nichts zu kopieren.
+if [ "$(cd "$HL_REPO_ROOT" && pwd -P)" != "$(cd "$HL_PREFIX" && pwd -P)" ]; then
+  as_user rsync -a --delete --exclude __pycache__ "$HL_REPO_ROOT/agentlink/backend/" "$BACKEND/"
+  as_user cp "$HL_REPO_ROOT/installer/lib/mac-agentlink-start.sh" "$START"
+fi
 as_user chmod 755 "$START"
 
 PY="$(pick_python)"

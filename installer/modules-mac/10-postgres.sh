@@ -22,6 +22,7 @@ if [ ! -s "$PWD_FILE" ]; then
   ( umask 077; openssl rand -hex 24 > "$PWD_FILE" )
 fi
 chmod 600 "$PWD_FILE"
+priv chown "$HL_USER" "$PWD_FILE"   # auch wenn das Kern-Update als root läuft
 DB_PWD="$(cat "$PWD_FILE")"
 DB_PWD_SQL="${DB_PWD//\'/\'\'}"
 

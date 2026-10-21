@@ -16,9 +16,14 @@ if [ "$(uname)" != "Darwin" ]; then
   echo "install-mac.sh ist nur für macOS – unter Linux: sudo bash installer/install.sh" >&2
   exit 1
 fi
+# Als normaler Nutzer (sudo nur für die LaunchDaemons) oder als root mit HL_USER – so ruft das
+# Kern-Update (update-mac.sh, LaunchDaemon) uns auf. brew/pip/npm laufen dann als HL_USER.
 if [ "$(id -u)" -eq 0 ]; then
-  echo "Bitte als normaler Nutzer starten (Homebrew verweigert root); sudo wird bei Bedarf abgefragt." >&2
-  exit 1
+  if [ -z "${HL_USER:-}" ] || [ "$HL_USER" = "root" ]; then
+    echo "Als root nur mit HL_USER=<Dienstnutzer> (Homebrew verweigert root)." >&2
+    echo "Sonst als normaler Nutzer starten; sudo wird bei Bedarf abgefragt." >&2
+    exit 1
+  fi
 fi
 
 export HL_USER="${HL_USER:-$(whoami)}"
