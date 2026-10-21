@@ -1,30 +1,20 @@
 #!/bin/bash
-# macOS: Redis über Homebrew als LaunchDaemon (nur 127.0.0.1).
+# macOS: Voraussetzungen prüfen bzw. über Homebrew nachinstallieren.
+#
+# Kein Redis: Homebrew hat für Intel-Macs keine fertigen Redis-Pakete mehr und baut es samt LLVM
+# und Rust aus dem Quellcode (Befund 21.10.2026, Test-Mac). AgentLink nutzt auf dem Mac den
+# Nachrichtenkanal im Speicher (REDIS_URL=memory://, siehe agentlink/backend/main.py).
 # PostgreSQL bringt der HydraHive-Kern mit (postgresql@16, LaunchDaemon io.hydrahive.postgres).
 set -euo pipefail
 # shellcheck source=../lib/mac-common.sh
 source "$(cd "$(dirname "$0")/../lib" && pwd)/mac-common.sh"
 
-brew_ensure redis
+brew_ensure python@3.12
+brew_ensure node
 
-REDIS_PREFIX="$(run_brew --prefix redis)"
-REDIS_DIR="$HL_DATA_DIR/redis"
-LABEL="io.hydrahive.redis"
-
-# brew services würde Redis als LaunchAgent starten – der läuft erst nach der Anmeldung und
-# stünde neben unserem Daemon. Abmelden, damit genau ein Redis läuft (wie bei PostgreSQL im Kern).
-run_brew services stop redis >/dev/null 2>&1 || true
-AGENT_HOME="$(dscl . -read "/Users/$HL_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}' || true)"
-[ -n "$AGENT_HOME" ] || AGENT_HOME="/Users/$HL_USER"
-priv rm -f "$AGENT_HOME/Library/LaunchAgents/homebrew.mxcl.redis.plist"
-
-priv mkdir -p "$REDIS_DIR" "$HL_LOG_DIR"
-priv chown -R "$HL_USER" "$HL_DATA_DIR"
-
-# Einstellungen direkt als Argumente: keine eigene Konfigdatei, die bei brew-Updates überschrieben wird.
-write_daemon "$LABEL" "$REDIS_DIR" "$HL_LOG_DIR/redis-hydralink.log" "$HL_LOG_DIR/redis-hydralink.log" \
-  "$REDIS_PREFIX/bin/redis-server" \
-  --bind 127.0.0.1 --port 6379 --protected-mode yes \
-  --dir "$REDIS_DIR" --save 60 1000 --appendonly no
-
-wait_for "Redis" "$REDIS_PREFIX/bin/redis-cli" -h 127.0.0.1 -p 6379 ping
+PG_BIN="$(run_brew --prefix postgresql@16)/bin"
+if [ ! -x "$PG_BIN/pg_isready" ] || ! "$PG_BIN/pg_isready" -h 127.0.0.1 -q 2>/dev/null; then
+  echo "PostgreSQL (postgresql@16) läuft nicht auf 127.0.0.1 – erst den HydraHive-Kern installieren" >&2
+  exit 1
+fi
+log "PostgreSQL des Kerns läuft"

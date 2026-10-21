@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 
 # Redis configuration
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+# memory:// = ohne Redis: Nachrichten gehen im selben Prozess direkt an den Verteiler.
+# Für macOS, wo Homebrew Redis auf Intel nur noch aus dem Quellcode baut. Gilt nur bei
+# genau einem uvicorn-Prozess (so starten ihn beide Installer).
+MEMORY_BUS = REDIS_URL.strip().lower().startswith("memory://")
 redis_client: Optional[Redis] = None
 pubsub = None
 
@@ -93,9 +97,26 @@ app.add_middleware(
 # REDIS PUB/SUB
 # ============================================================================
 
+async def dispatch_bus_message(data: dict):
+    """Verteilt eine Bus-Nachricht an die WebSocket-Kanäle (Redis- und memory-Weg)."""
+    # Broadcast to "all" channel
+    await manager.broadcast(data, channel="all")
+
+    # Only broadcast to agent channel if it's a handoff
+    if data.get("type") == "handoff_received" and "to_agent" in data:
+        agent_channel = f"agent:{data['to_agent']}"
+        await manager.broadcast(data, channel=agent_channel)
+
+    logger.info(f"Broadcasted message: {data.get('type', 'unknown')}")
+
+
 async def redis_listener():
     """Background task listening to Redis Pub/Sub with exponential backoff"""
     global redis_client, pubsub
+
+    if MEMORY_BUS:
+        logger.info("Nachrichtenkanal im Speicher (REDIS_URL=memory://) – kein Redis-Listener")
+        return
     
     retry_delay = 1
     max_delay = 32
@@ -115,18 +136,7 @@ async def redis_listener():
                 # Handle both direct messages and pattern messages
                 if message["type"] in ["message", "pmessage"]:
                     try:
-                        data = json.loads(message["data"])
-                        
-                        # Broadcast to "all" channel
-                        await manager.broadcast(data, channel="all")
-                        
-                        # Only broadcast to agent channel if it's a handoff
-                        if data.get("type") == "handoff_received" and "to_agent" in data:
-                            agent_channel = f"agent:{data['to_agent']}"
-                            await manager.broadcast(data, channel=agent_channel)
-                        
-                        logger.info(f"Broadcasted message: {data.get('type', 'unknown')}")
-                        
+                        await dispatch_bus_message(json.loads(message["data"]))
                     except json.JSONDecodeError as e:
                         logger.error(f"Invalid JSON from Redis: {e}")
                     except Exception as e:
@@ -155,7 +165,15 @@ async def redis_listener():
 async def publish_to_redis(channel: str, message: dict):
     """Publish message to Redis channel"""
     global redis_client
-    
+
+    if MEMORY_BUS:
+        # Rundlauf über JSON wie bei Redis: gleiche Datentypen beim Empfänger.
+        try:
+            await dispatch_bus_message(json.loads(json.dumps(message, default=str)))
+        except Exception as e:
+            logger.error(f"Error dispatching in-memory message: {e}")
+        return
+
     if not redis_client:
         logger.warning("Redis client not initialized - skipping publish")
         return
@@ -404,7 +422,9 @@ async def health(db: Session = Depends(get_db)):
     count = db.query(AgentStateDB).count()
     
     redis_status = "disconnected"
-    if redis_client:
+    if MEMORY_BUS:
+        redis_status = "memory"
+    elif redis_client:
         try:
             await redis_client.ping()
             redis_status = "connected"

@@ -37,9 +37,10 @@ as_user "$VENV/bin/pip" install --quiet -r "$BACKEND/requirements.txt"
 
 # Zugangsdaten: 0600, gehört dem Dienstnutzer, atomar ersetzt. Treiber psycopg2 ausdrücklich
 # (SQLAlchemy 2.1 nähme bei „postgresql://“ psycopg 3, das nicht installiert ist).
+# REDIS_URL=memory://: kein Redis auf dem Mac (siehe 00-deps.sh); setzt genau einen uvicorn-Prozess voraus.
 DB_PWD="$(cat "$HL_CONFIG_DIR/db.password")"
 ( umask 077
-  printf 'DATABASE_URL=postgresql+psycopg2://%s:%s@127.0.0.1:5432/%s\nREDIS_URL=redis://127.0.0.1:6379\n' \
+  printf 'DATABASE_URL=postgresql+psycopg2://%s:%s@127.0.0.1:5432/%s\nREDIS_URL=memory://\n' \
     "$HL_DB_USER" "$DB_PWD" "$HL_DB_NAME" > "$ENV_FILE.tmp" )
 chmod 600 "$ENV_FILE.tmp"
 mv -f "$ENV_FILE.tmp" "$ENV_FILE"

@@ -32,47 +32,34 @@ def _daemon_basics(p: dict, label: str) -> None:
     assert p["KeepAlive"] is True
 
 
-# ---------------------------------------------------------------- 00-deps.sh (Redis)
+# ---------------------------------------------------------------- 00-deps.sh
 
-def test_redis_installed_when_missing(mac):
+# Kein Redis auf dem Mac (Befund 21.10.: Homebrew baut Redis auf Intel aus dem Quellcode, samt
+# LLVM und Rust). AgentLink nutzt dort den Nachrichtenkanal im Speicher (REDIS_URL=memory://).
+
+def test_deps_installs_no_redis(mac):
     mac.uninstall("redis")
     r = mac.run("00-deps.sh")
     assert r.returncode == 0, r.stderr
-    assert "brew install redis" in " ".join(mac.call_lines())
+    calls = " ".join(mac.call_lines())
+    assert "install redis" not in calls
+    assert not mac.plist("io.hydrahive.redis").exists()
 
 
-def test_redis_not_reinstalled(mac):
+def test_deps_installs_missing_python_and_node(mac):
+    mac.uninstall("python@3.12")
+    mac.uninstall("node")
     r = mac.run("00-deps.sh")
     assert r.returncode == 0, r.stderr
-    assert not any(c.startswith("brew install redis") for c in mac.call_lines())
+    calls = mac.call_lines()
+    assert any(c.startswith("brew install python@3.12") for c in calls)
+    assert any(c.startswith("brew install node") for c in calls)
 
 
-def test_redis_runs_as_launchdaemon_on_localhost(mac):
-    r = mac.run("00-deps.sh")
-    assert r.returncode == 0, r.stderr
-    p = _plist(mac, "io.hydrahive.redis")
-    _daemon_basics(p, "io.hydrahive.redis")
-    args = p["ProgramArguments"]
-    assert args[0].endswith("/redis/bin/redis-server")
-    joined = " ".join(args)
-    assert "--bind 127.0.0.1" in joined          # nie im ganzen Netz
-    assert "--protected-mode yes" in joined
-    assert f"--dir {mac.data}/redis" in joined   # eigener Datenordner statt Homebrew-Standard
-    assert f"launchctl load {mac.plist('io.hydrahive.redis')}" in mac.call_lines()
-
-
-def test_redis_brew_services_agent_removed(mac):
-    agent = mac.home / "Library" / "LaunchAgents" / "homebrew.mxcl.redis.plist"
-    agent.write_text("x")
-    r = mac.run("00-deps.sh")
-    assert r.returncode == 0, r.stderr
-    assert not agent.exists()                    # sonst zweiter Redis bei der Anmeldung
-    assert "brew services stop redis" in mac.call_lines()
-
-
-def test_redis_not_answering_fails(mac):
-    r = mac.run("00-deps.sh", FAKE_REDIS_DOWN="1")
+def test_deps_requires_core_postgres(mac):
+    r = mac.run("00-deps.sh", FAKE_PG_DOWN="1")
     assert r.returncode != 0
+    assert "PostgreSQL" in r.stdout + r.stderr
 
 
 # ---------------------------------------------------------------- 10-postgres.sh
@@ -155,7 +142,7 @@ def test_backend_env_file_private_with_psycopg2_url(mac):
     text = env.read_text()
     pw = (mac.config / "db.password").read_text().strip()
     assert f"DATABASE_URL=postgresql+psycopg2://agentlink:{pw}@127.0.0.1:5432/agentlink" in text
-    assert "REDIS_URL=redis://127.0.0.1:6379" in text
+    assert "REDIS_URL=memory://" in text            # kein Redis auf dem Mac
 
 
 def test_backend_plist_without_secrets_and_via_wrapper(mac):
@@ -237,8 +224,9 @@ def test_install_mac_runs_all_modules_in_order(mac):
     out = r.stdout
     order = [out.index(m) for m in ("00-deps.sh", "10-postgres.sh", "20-agentlink.sh", "30-frontend.sh")]
     assert order == sorted(order)
-    for label in ("io.hydrahive.redis", "io.hydrahive.agentlink", "io.hydrahive.agentlink-frontend"):
+    for label in ("io.hydrahive.agentlink", "io.hydrahive.agentlink-frontend"):
         assert mac.plist(label).exists()
+    assert not mac.plist("io.hydrahive.redis").exists()
 
 
 def test_mac_modules_have_no_linux_tools():

@@ -6,7 +6,6 @@
 #   HL_USER        Dienstnutzer (wie der HydraHive-Kern auf dem Mac, nie root)
 #   HL_PREFIX      Code + venv, Standard /opt/hydralink
 #   HL_CONFIG_DIR  Zugangsdaten (0600), Standard /usr/local/etc/hydralink
-#   HL_DATA_DIR    Daten (Redis), Standard /usr/local/var/hydralink
 #   HL_LOG_DIR     Logs, Standard /usr/local/var/log
 #   HL_PLIST_DIR   LaunchDaemons, Standard /Library/LaunchDaemons
 
@@ -15,7 +14,6 @@ log() { printf "  · %s\n" "$*"; }
 HL_USER="${HL_USER:?HL_USER fehlt}"
 HL_PREFIX="${HL_PREFIX:-/opt/hydralink}"
 HL_CONFIG_DIR="${HL_CONFIG_DIR:-/usr/local/etc/hydralink}"
-HL_DATA_DIR="${HL_DATA_DIR:-/usr/local/var/hydralink}"
 HL_LOG_DIR="${HL_LOG_DIR:-/usr/local/var/log}"
 HL_PLIST_DIR="${HL_PLIST_DIR:-/Library/LaunchDaemons}"
 HL_DB_NAME="${HL_DB_NAME:-agentlink}"
