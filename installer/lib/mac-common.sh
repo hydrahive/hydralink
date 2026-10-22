@@ -12,6 +12,9 @@
 log() { printf "  · %s\n" "$*"; }
 
 HL_USER="${HL_USER:?HL_USER fehlt}"
+# Besitzer von Homebrew. Läuft der Kern unter einem eigenen Dienst-Konto (_hydrahive), gehört Homebrew weiter dem
+# Mac-Besitzer – der Kern reicht ihn als HL_BREW_USER durch. Ohne Angabe wie bisher HL_USER.
+HL_BREW_USER="${HL_BREW_USER:-$HL_USER}"
 HL_PREFIX="${HL_PREFIX:-/opt/hydralink}"
 HL_CONFIG_DIR="${HL_CONFIG_DIR:-/usr/local/etc/hydralink}"
 HL_LOG_DIR="${HL_LOG_DIR:-/usr/local/var/log}"
@@ -41,8 +44,8 @@ fi
 export PATH="$(dirname "$HL_BREW"):$PATH"
 
 as_root() { [ "$(id -u)" -eq 0 ]; }
-# Homebrew verweigert root – als root deshalb über den Dienstnutzer aufrufen.
-run_brew() { if as_root; then sudo -u "$HL_USER" "$HL_BREW" "$@"; else "$HL_BREW" "$@"; fi; }
+# Homebrew verweigert root – als root deshalb über den Homebrew-Besitzer aufrufen.
+run_brew() { if as_root; then sudo -u "$HL_BREW_USER" "$HL_BREW" "$@"; else "$HL_BREW" "$@"; fi; }
 # Befehl als Dienstnutzer (für git/pip/npm in dessen Ordnern).
 # sudo setzt einen eigenen PATH (secure_path) – npm/node aus Homebrew wären sonst unauffindbar.
 as_user() { if as_root; then sudo -u "$HL_USER" env "PATH=$PATH" HOME="$(_user_home)" "$@"; else "$@"; fi; }

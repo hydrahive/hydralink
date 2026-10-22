@@ -293,3 +293,25 @@ PATH="{mac.bin}:/usr/bin:/bin" exec "$@"
     # npm (Homebrew) unter sudo: PATH muss mit, sonst „npm: command not found“
     npm = [c for c in calls if c.startswith("sudo -u tester env PATH=") and " npm ci" in c]
     assert npm and str(real_brew.parent) in npm[0]
+
+
+# ---------------------------------------------------------------- Eigenes Dienst-Konto (Kern: _hydrahive)
+
+def test_service_account_brew_as_brew_user_rest_as_service_account(mac):
+    """Kern mit eigenem Dienst-Konto (docs/plans/mac-service-user.md im Kern): Homebrew gehört dem Mac-Besitzer
+    (HL_BREW_USER), alles andere läuft als Dienst-Konto (HL_USER)."""
+    r = mac.run(INSTALL_MAC, FAKE_UID="0", HL_USER="_hydrahive", HL_BREW_USER="alexmo")
+    assert r.returncode == 0, r.stdout + r.stderr
+    calls = mac.call_lines()
+    brew = [c for c in calls if c.startswith("sudo -u") and c.split()[3].endswith("brew")]
+    assert brew and all(c.startswith("sudo -u alexmo ") for c in brew), brew
+    assert any(c.startswith("sudo -u _hydrahive") and "pip" in c for c in calls)
+    assert _plist(mac, "io.hydrahive.agentlink")["UserName"] == "_hydrahive"
+
+
+def test_brew_user_defaults_to_service_user(mac):
+    """Ohne HL_BREW_USER wie bisher: brew als HL_USER (alte Kern-Installationen, Kern-Update ohne Konto)."""
+    r = mac.run(INSTALL_MAC, FAKE_UID="0", HL_USER="tester")
+    assert r.returncode == 0, r.stdout + r.stderr
+    brew = [c for c in mac.call_lines() if c.startswith("sudo -u") and c.split()[3].endswith("brew")]
+    assert brew and all(c.startswith("sudo -u tester ") for c in brew), brew
